@@ -189,6 +189,7 @@ const I18N = {
        your_answer:"Your answer: {a}", correct_is:"Correct: {a}", print:"🖨️ Print / Save as PDF",
        save_img:"📷 Save Report as Image", copy_txt:"📋 Copy Summary", img_hint:"Long-press the image to save it, or use Share / Download",
        share:"Share", download:"Download", close:"Close", copied:"Summary copied — paste it to your teacher",
+       img_hint_touch:"👆 Long-press the image above → “Save Image” (or “Send to a friend” in WeChat)", img_fail:"Could not create the image: {e}",
        copy_fail:"Copy failed — select the text and copy it manually", rpt_title:"Score Report", rpt_score:"{c} / {N} correct",
        rpt_topics:"By topic", rpt_items:"Item analysis", rpt_footer:"Generated {date}",
        sum_student:"Student", sum_date:"Date", sum_score:"Score", sum_topics:"By topic", sum_items:"Items",
@@ -204,6 +205,7 @@ const I18N = {
        your_answer:"你的答案：{a}", correct_is:"正确答案：{a}", print:"🖨️ 打印 / 存为 PDF",
        save_img:"📷 保存报告图片", copy_txt:"📋 复制成绩摘要", img_hint:"长按图片保存，或点击分享 / 下载",
        share:"分享", download:"下载", close:"关闭", copied:"已复制成绩摘要，粘贴发给老师即可",
+       img_hint_touch:"👆 长按上方图片 → 「保存图片」（微信里也可选「发送给朋友」）", img_fail:"生成图片失败：{e}",
        copy_fail:"复制失败，请手动选择文字复制", rpt_title:"成绩报告", rpt_score:"答对 {c} / {N}",
        rpt_topics:"按知识点", rpt_items:"逐题明细", rpt_footer:"生成于 {date}",
        sum_student:"学生", sum_date:"日期", sum_score:"成绩", sum_topics:"知识点", sum_items:"逐题",
@@ -377,13 +379,18 @@ function makeReportImage(){
   y+=44; g.fillStyle="#9b968b"; font(13,false); g.fillText(t("rpt_footer",{date:new Date().toLocaleString()}),pad,y);
   const url=c.toDataURL("image/png");
   document.getElementById("reportImg").src=url;
-  document.getElementById("dlBtn").onclick=()=>{ const a=document.createElement("a"); a.href=url; a.download="report.png"; document.body.appendChild(a); a.click(); a.remove(); };
+  // iOS replaces the page with the image on a "download" tap and WeChat blocks downloads outright —
+  // on those, long-press-to-save is the only reliable path, so hide the button and say so plainly.
+  const ua=navigator.userAgent, touchOnly=/iPhone|iPad|iPod|MicroMessenger/i.test(ua) || (navigator.maxTouchPoints>1 && /Macintosh/.test(ua));
+  const dl=document.getElementById("dlBtn"); dl.style.display=touchOnly?"none":"inline-block";
+  dl.onclick=()=>{ const a=document.createElement("a"); a.href=url; a.download="report.png"; document.body.appendChild(a); a.click(); a.remove(); };
+  document.querySelector("#imgModal .hint").textContent=touchOnly?t("img_hint_touch"):t("img_hint");
   const sh=document.getElementById("shareBtn"); sh.style.display="none";
-  if(navigator.share && navigator.canShare){ c.toBlob(b=>{ const f=new File([b],"report.png",{type:"image/png"});
-    if(navigator.canShare({files:[f]})){ sh.style.display="inline-block"; sh.onclick=()=>navigator.share({files:[f],title:t("rpt_title")}).catch(()=>{}); } }); }
+  try{ if(navigator.share && navigator.canShare){ c.toBlob(b=>{ try{ const f=new File([b],"report.png",{type:"image/png"});
+    if(navigator.canShare({files:[f]})){ sh.style.display="inline-block"; sh.onclick=()=>navigator.share({files:[f],title:t("rpt_title")}).catch(()=>{}); } }catch(e){} }); } }catch(e){}
   document.getElementById("imgModal").style.display="block";
 }
-document.getElementById("imgBtn").addEventListener("click",makeReportImage);
+document.getElementById("imgBtn").addEventListener("click",()=>{ try{ makeReportImage(); }catch(e){ showToast(t("img_fail",{e:e.message||e})); } });
 document.getElementById("copyBtn").addEventListener("click",copySummary);
 document.getElementById("closeBtn").addEventListener("click",()=>{ document.getElementById("imgModal").style.display="none"; });
 
