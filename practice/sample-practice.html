@@ -63,6 +63,7 @@
   th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
   th{color:var(--muted);font-weight:600}
   .topic-row td{font-weight:600}
+  @media (max-width:480px){ table{font-size:12.5px} th,td{padding:6px 5px} th{white-space:nowrap} .ring{width:130px;height:130px} .ring > div{width:100px;height:100px} .ring b{font-size:28px} }
   .mini{font-size:12px;color:var(--muted)}
   .review-item{border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0;break-inside:avoid}
   .review-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;font-weight:700;margin-bottom:8px}
@@ -71,6 +72,16 @@
   .pill.no{background:#fbe6e3;color:var(--bad)}
   .pill.key{background:#eee7d8;color:var(--muted)}
   .review-item img{width:100%;border:1px solid var(--line);border-radius:8px;display:block}
+  /* report export (mobile-first: image to long-press, text to paste; print only where a printer dialog exists) */
+  .report-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .desktop-only{display:none}
+  @media (hover:hover) and (pointer:fine){.desktop-only{display:inline-block}}
+  #imgModal{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.62);overflow:auto;padding:16px}
+  #imgModal .box{max-width:720px;margin:44px auto 0;background:#fff;border-radius:14px;padding:14px;text-align:center}
+  #imgModal img{width:100%;border:1px solid var(--line);border-radius:8px;display:block}
+  #imgModal .hint{font-size:13px;color:var(--muted);margin:10px 0 4px}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;
+    border-radius:20px;font-size:13px;z-index:9500;display:none;max-width:90vw;text-align:center}
   
   #gate{position:fixed;inset:0;z-index:9999;background:var(--brand);display:flex;align-items:center;justify-content:center;padding:24px}
   #gate .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:34px 28px;max-width:360px;width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -146,11 +157,24 @@
       <div id="reviewList"></div>
     </div>
 
-    <div class="actions noprint">
-      <button class="ghost" onclick="window.print()" data-i18n="print">🖨️ Download / Print PDF Report</button>
+    <div class="actions report-actions noprint">
+      <button class="ghost" id="imgBtn" data-i18n="save_img">📷 Save Report as Image</button>
+      <button class="ghost" id="copyBtn" data-i18n="copy_txt">📋 Copy Summary</button>
+      <button class="ghost desktop-only" onclick="window.print()" data-i18n="print">🖨️ Print / Save as PDF</button>
     </div>
   </div>
 </div>
+
+<div id="imgModal" class="noprint"><div class="box">
+  <img id="reportImg" alt="Score report">
+  <div class="hint" data-i18n="img_hint">Long-press the image to save it, or use Share / Download</div>
+  <div class="actions" style="margin:6px 0 0">
+    <button class="ghost" id="shareBtn" data-i18n="share" style="display:none">Share</button>
+    <button class="ghost" id="dlBtn" data-i18n="download">Download</button>
+    <button class="ghost" id="closeBtn" data-i18n="close">Close</button>
+  </div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 /* ---------- UI language (EN / 中文). Question images are whatever the PDF is; only chrome text switches. ---------- */
@@ -162,7 +186,12 @@ const I18N = {
        th_topic:"Topic", th_ct:"Correct / Total", th_acc:"Accuracy", item:"Item Analysis",
        th_q:"Q#", th_your:"Your Answer", th_correct:"Correct", th_result:"Result",
        ok:"✔ Correct", wrong:"✘ Wrong", review:"Answer Review — All Questions",
-       your_answer:"Your answer: {a}", correct_is:"Correct: {a}", print:"🖨️ Download / Print PDF Report",
+       your_answer:"Your answer: {a}", correct_is:"Correct: {a}", print:"🖨️ Print / Save as PDF",
+       save_img:"📷 Save Report as Image", copy_txt:"📋 Copy Summary", img_hint:"Long-press the image to save it, or use Share / Download",
+       share:"Share", download:"Download", close:"Close", copied:"Summary copied — paste it to your teacher",
+       copy_fail:"Copy failed — select the text and copy it manually", rpt_title:"Score Report", rpt_score:"{c} / {N} correct",
+       rpt_topics:"By topic", rpt_items:"Item analysis", rpt_footer:"Generated {date}",
+       sum_student:"Student", sum_date:"Date", sum_score:"Score", sum_topics:"By topic", sum_items:"Items",
        meta:"Student: {name}  |  Date: {date}  |  {label}", noname:"(no name)",
        gate_sub:"Enter the passcode to begin.", gate_ph:"Passcode", gate_btn:"Start practice",
        gate_wrong:"Incorrect passcode. Please try again.", gate_blocked:"This browser blocked the check — open in a standard browser."},
@@ -172,7 +201,12 @@ const I18N = {
        th_topic:"知识点", th_ct:"答对 / 总数", th_acc:"正确率", item:"逐题明细",
        th_q:"题号", th_your:"你的答案", th_correct:"正确答案", th_result:"结果",
        ok:"✔ 正确", wrong:"✘ 错误", review:"答案回顾——全部题目",
-       your_answer:"你的答案：{a}", correct_is:"正确答案：{a}", print:"🖨️ 下载 / 打印 PDF 报告",
+       your_answer:"你的答案：{a}", correct_is:"正确答案：{a}", print:"🖨️ 打印 / 存为 PDF",
+       save_img:"📷 保存报告图片", copy_txt:"📋 复制成绩摘要", img_hint:"长按图片保存，或点击分享 / 下载",
+       share:"分享", download:"下载", close:"关闭", copied:"已复制成绩摘要，粘贴发给老师即可",
+       copy_fail:"复制失败，请手动选择文字复制", rpt_title:"成绩报告", rpt_score:"答对 {c} / {N}",
+       rpt_topics:"按知识点", rpt_items:"逐题明细", rpt_footer:"生成于 {date}",
+       sum_student:"学生", sum_date:"日期", sum_score:"成绩", sum_topics:"知识点", sum_items:"逐题",
        meta:"学生：{name}  |  日期：{date}  |  {label}", noname:"（未填姓名）",
        gate_sub:"请输入密码开始练习。", gate_ph:"密码", gate_btn:"开始练习",
        gate_wrong:"密码不正确，请重试。", gate_blocked:"当前浏览器不支持校验，请用标准浏览器打开。"}
@@ -293,6 +327,65 @@ document.getElementById("submitBtn").addEventListener("click",()=>{
   document.getElementById("report").style.display="block";
   document.getElementById("report").scrollIntoView({behavior:"smooth"});
 });
+
+/* ---------- Report export that works on phones. window.print() is a no-op inside WeChat and most in-app browsers,
+   so the primary paths are an image (long-press to save / share) and a text summary (paste to the teacher). ---------- */
+function summaryText(){
+  const r=lastResult; if(!r) return "";
+  const N=QUESTIONS.length, pct=Math.round(r.correct/N*100);
+  return [document.querySelector("header h1").textContent+" — "+t("rpt_title"),
+    t("sum_student")+": "+(r.name||t("noname"))+" | "+t("sum_date")+": "+r.date,
+    t("sum_score")+": "+r.correct+"/"+N+" ("+pct+"%)",
+    t("sum_topics")+": "+Object.entries(r.topics).map(([k,v])=>`${k} ${v.c}/${v.t}`).join(", "),
+    t("sum_items")+": "+r.rows.map(({item,mine,ok})=>`Q${item.q} ${mine}${ok?"✔":"✘("+item.answer+")"}`).join("  ")].join("\n");
+}
+function showToast(msg){ const el=document.getElementById("toast"); el.textContent=msg; el.style.display="block"; setTimeout(()=>el.style.display="none",2400); }
+async function copySummary(){
+  const txt=summaryText(); if(!txt) return;
+  try{ await navigator.clipboard.writeText(txt); showToast(t("copied")); }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); showToast(t("copied")); }catch(e2){ showToast(t("copy_fail")); } ta.remove(); }
+}
+function makeReportImage(){
+  const r=lastResult; if(!r) return;
+  const N=QUESTIONS.length, pct=Math.round(r.correct/N*100), topics=Object.entries(r.topics);
+  const W=900, pad=40, rowH=34;
+  const H=110+40+40+110+60+topics.length*rowH+60+r.rows.length*rowH+90;
+  const scale=Math.min(2, Math.sqrt(16e6/(W*H)));          // stay under iOS canvas limits on long quizzes
+  const c=document.createElement("canvas"); c.width=Math.round(W*scale); c.height=Math.round(H*scale);
+  const g=c.getContext("2d"); g.scale(scale,scale);
+  const font=(px,bold)=>{ g.font=`${bold?"700 ":""}${px}px -apple-system,"Segoe UI",Roboto,"PingFang SC","Helvetica Neue",Arial,sans-serif`; };
+  const line=(y)=>{ g.strokeStyle="#e6e1d6"; g.lineWidth=1; g.beginPath(); g.moveTo(pad,y); g.lineTo(W-pad,y); g.stroke(); };
+  g.fillStyle="#fff"; g.fillRect(0,0,W,H);
+  g.fillStyle="#3b7a57"; g.fillRect(0,0,W,110);
+  g.fillStyle="#fff"; g.textAlign="center"; font(28,true); g.fillText(document.querySelector("header h1").textContent,W/2,50);
+  font(16,false); g.fillText(t("rpt_title"),W/2,82);
+  g.textAlign="left"; let y=150;
+  g.fillStyle="#7a7367"; font(15,false); g.fillText(t("meta",{name:r.name||t("noname"),date:r.date,label:"Sample Practice Set (MCQ)"}),pad,y); y+=40;
+  g.fillStyle="#3b7a57"; font(64,true); g.fillText(pct+"%",pad,y+58);
+  g.fillStyle="#2b2b2b"; font(20,false); g.fillText(t("rpt_score",{c:r.correct,N:N}),pad+200,y+52); y+=110;
+  g.fillStyle="#3b7a57"; font(17,true); g.fillText(t("rpt_topics"),pad,y); y+=14; line(y);
+  font(16,false);
+  topics.forEach(([k,v])=>{ y+=rowH; g.fillStyle="#2b2b2b"; g.fillText(k,pad,y-10);
+    g.textAlign="right"; g.fillText(`${v.c} / ${v.t}    ${Math.round(v.c/v.t*100)}%`,W-pad,y-10); g.textAlign="left"; line(y); });
+  y+=46; g.fillStyle="#3b7a57"; font(17,true); g.fillText(t("rpt_items"),pad,y); y+=14; line(y);
+  font(16,false);
+  r.rows.forEach(({item,mine,ok})=>{ y+=rowH; g.fillStyle="#2b2b2b"; g.fillText("Q"+item.q,pad,y-10); g.fillText(mine,pad+90,y-10);
+    g.fillStyle=ok?"#2f8f5b":"#c0392b"; g.fillText(ok?t("ok"):t("wrong")+"  ("+item.answer+")",pad+170,y-10);
+    g.fillStyle="#7a7367"; g.textAlign="right"; g.fillText(item.topic,W-pad,y-10); g.textAlign="left"; line(y); });
+  y+=44; g.fillStyle="#9b968b"; font(13,false); g.fillText(t("rpt_footer",{date:new Date().toLocaleString()}),pad,y);
+  const url=c.toDataURL("image/png");
+  document.getElementById("reportImg").src=url;
+  document.getElementById("dlBtn").onclick=()=>{ const a=document.createElement("a"); a.href=url; a.download="report.png"; document.body.appendChild(a); a.click(); a.remove(); };
+  const sh=document.getElementById("shareBtn"); sh.style.display="none";
+  if(navigator.share && navigator.canShare){ c.toBlob(b=>{ const f=new File([b],"report.png",{type:"image/png"});
+    if(navigator.canShare({files:[f]})){ sh.style.display="inline-block"; sh.onclick=()=>navigator.share({files:[f],title:t("rpt_title")}).catch(()=>{}); } }); }
+  document.getElementById("imgModal").style.display="block";
+}
+document.getElementById("imgBtn").addEventListener("click",makeReportImage);
+document.getElementById("copyBtn").addEventListener("click",copySummary);
+document.getElementById("closeBtn").addEventListener("click",()=>{ document.getElementById("imgModal").style.display="none"; });
 
 applyLang();
 
